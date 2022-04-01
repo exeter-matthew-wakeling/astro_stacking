@@ -7,12 +7,14 @@ This software is a motley collection of random tools that I have written that ca
 3. Combine multiple stacked photos together as a weighted average.
 4. Remove background gradients from images.
 5. Tone-map the high-dynamic-range photo to an output image.
+
 And a few other tasks as necessary. The software is under regular development, because I am using it, and I keep needing to do new things.
 
 ## Running Java
 This software is written purely in Java. It depends on two external libraries, which are:
 1. A TIFF library, available from https://github.com/ngageoint/tiff-java
 2. A FITS library, available from https://github.com/nom-tam-fits/nom-tam-fits
+
 You should download the JAR file for both of these libraries, then download all the `*.java` files from this repository.
 
 Running this software requires that the library JAR files and the java from this repository are in the Java classpath, in order for Java to find them. This can be done in two ways. The first option is to set the CLASSPATH environment variable:
@@ -75,6 +77,7 @@ This produces statistics on each image in the directory. The output file contain
 6. The number of stars that are reasonably bright and aren't clipped.
 7. The FWHM blurriness of those stars.
 8. The full width of 1/20 maximum brightness of those stars.
+
 You should plot these on a graph, which will allow you to spot any images that are clear outliers. For instance, to plot the mean brightness of the image using gnuplot, run gnuplot, and enter the following command:
 ```
 plot 'means' using 0:2
