@@ -221,3 +221,4 @@ This software is not finished. Here are some things that are left to do:
 5. Switch the integration algorithm in StitchBayer from mean-reject-constant-percentage to sigma-kappa.
 6. Implement a pixel-maths program for generalised combining of different colour channels, such as merging Ha with Red. I did this in a bespoke manner for the M82 BAT, coding it directly in Java, but it would be much nicer to be able to specify maths on the command line.
 7. Allow for Bayer arrangements other than RGGB, and also mono cameras.
+8. Improve the gradient removal, to automatically optimise a flat gradient and a radial gradient.
