@@ -87,7 +87,7 @@ If there are clouds contaminating your images, then typically the mean brightnes
 ### Producing guide images, and determining chromatic aberration correction
 In the light frames directory, choose a single image, and run dcraw on it, like this:
 ```
-dcraw -w -W -t 0 -C <red> <blue> <file
+dcraw -w -W -t 0 -C <red> <blue> <file>
 ```
 where \<red\> and \<blue\> are numbers very close to 1, and \<file\> is the name of the camera raw file. Dcraw will convert the raw image to a PNM image file. The red and blue channels of the image will be enlarged/shrunk by the factor that you have specified. Look at stars in the very extreme corners of the image in an image viewer. You should adjust the \<red\> and \<blue\> numbers until the stars in the corner have as little chromatic aberration as possible. For instance, for my main lens, I use "-C 1.0005 1.0001". Note these two numbers. Once you have established this, we need to convert *all* the raw files, and additionally convert them to jpegs, which can be done by:
 ```
@@ -127,7 +127,7 @@ Copy the project.pto file to project_pgm.pto. Edit the new file, and search/repl
 ```
 java StitchBayer project_pgm.pto <output_prefix> -black <dark_directory>/*.pgm -flat <flat_directory>/*.pgm -flatdark <flatdark_directory>/*.pgm -threads <number of CPU cores> -C <red> <blue>
 ```
-Replacing all the relevant bits in that command. The software will name all its output files starting with the output prefix. Use the \<red\> and \<blue\> numbers that you determined a couple of sections earlier. This may take some time. The software memory-maps all of the input PGM files, and maps them onto the output in a single step, so there are no intermediate mapped images. The software will produce two output files - the first is `\<output_prefix\>_sourceCount.pgm` which is a greyscale image where the brightness is how many source images were used. The second is `\<output_prefix\>_image.pfm` which is a 3-channel 32-bit floating point image.
+Replacing all the relevant bits in that command. The software will name all its output files starting with the output prefix. Use the \<red\> and \<blue\> numbers that you determined a couple of sections earlier. This may take some time. The software memory-maps all of the input PGM files, and maps them onto the output in a single step, so there are no intermediate mapped images. The software will produce two output files - the first is `\<output_prefix\>_sourceCount.pgm` which is a greyscale image where the brightness is how many source images were used. The second is `\<output_prefix\>_image.pfm` which is a 3-channel 32-bit floating point image in a similar format to PNM.
 
 ### Tone-mapping the result
 We need to determine the best amount of light pollution to subtract from the image. To do this, run:
@@ -141,3 +141,82 @@ java ToneMap <output_prefix>_image.pfm -ramp <ramp> -black <10%_red> <10%_green>
 The \<ramp\> number is how much you want the dark areas of the image to be brightened. The tone-mapping applies a logarithmic curve to the brightness so that full brightness pixels are unchanged, but very dark pixels are brightened by the factor you specify as the \<ramp\>. The colour is preserved as the brightness is changed. You may also want to set the following parameters:
 1. -white \<number\> which sets the maximum brightness clipping level. The software normally calculates this itself as the minimum of the brightest pixel in the three colour channels. If you set this higher, then the three colour channels may clip at different levels, and the brightest stars may be rendered as purple. If you set it lower, then that would allow dimmer objects such as galaxies and nebulae to be brightened.
 2. -mult \<red\> \<green\> \<blue\> which sets the colour balance. Use this if the white balance is incorrect. If you shoot your flat frames with a computer monitor or pad, then you probably won't need to use this, but if you use sky flats then you probably will.
+
+## Stacking multiple stacked images
+The images to be stacked together can be taken using different cameras, with different settings, at different resolutions, different angles and focal lengths. Some of this functionality has not yet been written. Firstly, the images need to be converted to a common format.
+
+### Converting images.
+I have provided several programs to convert images from TIFF and FITS format into 32-bit float PNM-like format, and from PNM-like format into TIFF format. These are:
+1. java Convert16bitToFloatPnm \<input_file\>.pnm \>\<output_file\>.pfm - converts from an 8-bit or 16-bit PNM into 32-bit float PNM-like format. To convert from 16-bit TIFF format, first use tifftopnm, which is part of the netpbm software collection.
+2. java Convert32bitTifToPnm \<input_file\>.tiff \>\<output_file\>.pfm - converts from a 32-bit float TIFF file into a 32-bit float PNM-like format.
+3. java ConvertFitsToFloatPnm \<input_file\>.fits \>\<output_file\>.pfm - converts from a 32-bit float FITS file into a 32-bit float PNM-like format.
+4. java ConvertToLinearPpm \<input_file\>.pfm \>\<output_file\>.pnm - converts from a 32-bit float PNM-like format to 16-bit linear PNM format. This can be further converted into a 16-bit TIFF file using pnmtotiff, which is part of the netpbm software collection.
+5. java Convert32bitPnmToTif \<input_file\>.pfm \>\<output_file\>.tiff - converts from a 32-bit float PNM-like format to a 32-bit float TIFF format.
+
+Note that if an input TIFF/FITS image is a greyscale single-channel image, then a 3-channel 32-bit float PNM-like file will still be created, but with all 3 channels containing identical values. This is likely to change in the future - I plan to extend the file format to allow a number of channels that isn't 3. For processing, all the input files must be in the 32-bit float PNM-like format. They can be converted to TIFF or tone-mapped once the final result is made.
+
+### Aligning the images
+This part is not yet written, because I didn't need it for the M82 BAT image. I'll need it for the Andromeda image though, and it won't take long to write.
+
+### Masking the input images
+Sometimes parts of the input images have pixel values that are incorrect and must be ignored. For example, in the M82 BAT data, the joelkuiper image doesn't cover the whole target image, and the edges have been antialiased. That antialiased edge presents itself as a very dark pixels, which is false and can introduce artefacts, so it must be masked off. To mask off an image, tone-map it into an image that can be loaded into an image editor such as GIMP, then add a second layer, and draw over the areas that must be masked off, so that the areas that are OK are black, and the areas that must be ignored are white. Then save the image as a PNM file, and run the following:
+```
+java MaskPfm <input_file>.pfm <mask>.pnm ><output_file>.pfm
+```
+
+### Measuring the brightness and noise level of each image
+In order to combine multiple images, it is necessary to measure how bright the features are, and how noisy the background is. To do this, we need to pick an area that has no stars, galaxies, or nebulae. The brightness and noise in this area will be measured. We also need to pick an area that has a reasonably consistent brightness that comes from galaxy or nebulae emissions, without too many distinguishable stars. The brightness in this area will be measured. The areas are defined by drawing a box around them, and specifying the x-y coordinates of the top left corner and the bottom right corner. This step should be performed when the multiple images are aligned against each other, and after any gradients have been removed. The areas analysed should be the same for all the images to be combined. The command is:
+```
+java BrightnessAndNoise <input_file>.pfm <dark_left_x> <dark_top_y> <dark_right_x> <dark_bottom_y> <light_left_x> <light_top_y> <light_right_x> <light_bottom_y>
+```
+The software will output a single row with multiple tab-separated values, which are:
+1. The name of the input file
+2. The mean red brightness of the dark region
+3. The red noise level in the dark region
+4. The mean red brightness of the bright region
+5. The red weight for combining the multiple images
+6. The mean green brightness of the dark region
+7. The green noise level in the dark region
+8. The mean green brightness of the bright region
+9. The green weight for combining the multiple images
+10. The mean blue brightness of the dark region
+11. The blue noise level in the dark region
+12. The mean blue brightness in the bright region
+13. The blue weight for combining the multiple images
+
+### Combining multiple images
+To combine multiple images, we use the weights from the previous step, and run:
+```
+java WeightedSum <file1>.pfm <weight1> <file2>.pfm <weight2> ... ><output>.pfm
+```
+I will be changing this process shortly, because it doesn't allow for different weights for the three channels, and it isn't completely sensible about what to do when one image has no values over an area.
+
+Once the final image has been created, it can be tone mapped as described above.
+
+## Removing gradients from images
+Often, light pollution background of a space image has a gradient, so it is not simply a matter of subtracting a constant value to cancel the light pollution out. The following software will add the specified gradient, hopefully to cancel it out. You can discover what the values should be by running BrightnessAndNoise as described earlier, and specifying areas to the left/right/top/bottom.
+```
+java AddGradient <input_file>.pfm <red_base> <red_x> <red_y> <green_base> <green_x> <green_y> <blue_base> <blue_x> <blue_y> ><output_file>.pfm
+```
+
+## How to combine subs with different cameras/settings/temperature
+To combine sub-frames taken using different settings, we should first align all the sub-frames to the same target image. The different cameras/settings/temperatures will require different dark/flat/flatdark frames, and so StitchBayer needs to be run separately for the different groups, and then the results can be combined.
+1. Sort the images into categories as above, placing light frames into separate groups by their camera/settings.
+2. Convert the images into PGM files as above.
+3. Determine the chromatic aberration for each group, and convert to PNM and JPEG as above.
+4. Run ProduceMatches2 and run hugin to align *all* of the sub-frames together.
+5. Split the project.pto file into sections. In hugin, delete images so that only images of a single group are present. Then, don't change the layout or perform any optimisation, but save the project under a different name for that group. Reload the complete project, and repeat for the other groups.
+6. For each group, run StitchBayer on the relevant project_pgm.pto file, with the correct darks/flats/flatdarks.
+7. Run WeightedSum to combine the multiple output files into one. Choose the weights either by measuring the noise using BrightnessAndNoise, or by logic from the actual parameters.
+8. Run ToneMap as above.
+
+If the separate groups are taken from the same camera but with different settings, then it may be possible to work out what the weights should be. The weight for each group should be the brightness divided by the square of the dark noise. So, say we have 20 light frames taken with a 2 minute exposure, and 30 frames taken with a 1 minute exposure. The 2-minute exposure images should have twice the brightness of the 1-minute exposures, but the square of the dark noise (assuming the noise is dominated by light pollution shot noise) is also twice as large per exposure. The square of dark noise is inversely proportional to the number of sub-frames (same assumption). So, the 20 frames of 2 minutes should be given a weight of 20, and the 30 frames of 1 minute should be given a weight of 30. The 20 frames of 2 minutes will contribute more to the output image, even though the weight is lower, because they are brighter.
+
+## Todo list
+This software is not finished. Here are some things that are left to do:
+1. Improve file format, to allow a number of colour channels other than three. Better still allow the channels to be named.
+2. Write the software to remap stacked images.
+3. Improve the stacking of multiple images - combine the measurement of noise and brightness with the weighted summing software, so that we don't have to copy across a whole load of numbers from one program to another.
+4. Improve the stacking of multiple images - implement a multi-resolution spline to cope with source images with significantly different resolution.
+5. Switch the integration algorithm in StitchBayer from mean-reject-constant-percentage to sigma-kappa.
+6. Implement a pixel-maths program for generalised combining of different colour channels, such as merging Ha with Red. I did this in a bespoke manner for the M82 BAT, coding it directly in Java, but it would be much nicer to be able to specify maths on the command line.
